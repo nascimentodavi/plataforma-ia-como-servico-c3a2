@@ -9,10 +9,10 @@ metadata:
 spec:
   ingressClassName: nginx
   tls:
-    - hosts: [ia.seudominio.com.br]
+    - hosts: [ia.nascimentodavi.dev.br]
       secretName: plataforma-ia-tls
   rules:
-    - host: ia.seudominio.com.br
+    - host: ia.nascimentodavi.dev.br
       http:
         paths:
           - path: /

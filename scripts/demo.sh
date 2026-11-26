@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Teste ponta a ponta da plataforma (so precisa de bash + curl).
 #   ./scripts/demo.sh                          -> testa http://localhost:8000
-#   ./scripts/demo.sh https://ia.seudominio.com -> testa o deploy publico
+#   ./scripts/demo.sh https://ia.nascimentodavi.dev.br -> testa o deploy publico
 set -euo pipefail
 
 URL="${1:-http://localhost:8000}"

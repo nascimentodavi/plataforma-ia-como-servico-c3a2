@@ -13,16 +13,16 @@ Internet ──HTTPS:443──> Apache (TLS Let's Encrypt, proxy reverso)
 
 O Apache ja ocupa 80/443 na VPS, entao ele faz a terminacao TLS e a stack escuta
 apenas em `127.0.0.1`. Todos os comandos abaixo sao executados **como root** na VPS.
-Troque `ia.seudominio.com.br` pelo seu subdominio.
+O subdominio usado e `ia.nascimentodavi.dev.br`.
 
 ---
 
 ## 0. DNS
 
-Crie um registro **A** `ia.seudominio.com.br` apontando para o IP da VPS e confira:
+Crie um registro **A** `ia.nascimentodavi.dev.br` apontando para o IP da VPS e confira:
 
 ```bash
-dig +short ia.seudominio.com.br     # deve mostrar o IP da VPS
+dig +short ia.nascimentodavi.dev.br     # deve mostrar o IP da VPS
 ```
 
 ## 1. Preparar o Podman
@@ -45,7 +45,7 @@ free -h    # a stack completa usa ~1,2 GB de RAM
 
 ```bash
 apt-get install -y git
-cd /opt
+cd /var/www
 git clone https://github.com/nascimentodavi/plataforma-ia-como-servico-c3a2.git
 cd plataforma-ia-como-servico-c3a2
 ```
@@ -109,13 +109,13 @@ certificado e a mesma dos demais sites da VPS. Sem Cloudflare, bastaria
 ## 7. Validar o deploy publico
 
 ```bash
-bash scripts/demo.sh https://ia.seudominio.com.br
+bash scripts/demo.sh https://ia.nascimentodavi.dev.br
 ```
 
 No navegador:
-- `https://ia.seudominio.com.br/docs` (Swagger: faca login e use **Authorize**)
-- `https://ia.seudominio.com.br/painel` (painel de metricas)
-- `https://ia.seudominio.com.br/jaeger` (traces, pede a senha do passo 5)
+- `https://ia.nascimentodavi.dev.br/docs` (Swagger: faca login e use **Authorize**)
+- `https://ia.nascimentodavi.dev.br/painel` (painel de metricas)
+- `https://ia.nascimentodavi.dev.br/jaeger` (traces, pede a senha do passo 5)
 
 Por fim, coloque a URL publica no `README.md` (secao "URL publica").
 
@@ -147,7 +147,7 @@ cat /root/.ssh/deploy_github        # conteudo -> segredo VPS_CHAVE_SSH
 No GitHub (Settings > Secrets and variables > Actions):
 - **Variables:** `DEPLOY_HABILITADO = true`
 - **Secrets:** `VPS_HOST` (IP/dominio), `VPS_USUARIO` (`root`), `VPS_CHAVE_SSH`,
-  `VPS_DIRETORIO` (`/opt/plataforma-ia-como-servico-c3a2`)
+  `VPS_DIRETORIO` (`/var/www/plataforma-ia-como-servico-c3a2`)
 
 ## Problemas comuns
 
