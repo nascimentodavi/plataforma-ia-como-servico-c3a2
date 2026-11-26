@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+venv
+.env
+**/__pycache__
+**/*.pyc
+**/*.joblib
+.pytest_cache
+k8s
+docs
+tests
+scripts
+*.md
