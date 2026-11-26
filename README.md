@@ -27,7 +27,7 @@ Teste rápido do deploy público: `bash scripts/demo.sh https://ia.nascimentodav
 
 ```mermaid
 flowchart LR
-    C[Cliente] -- HTTPS --> P[Proxy TLS<br/>Apache na VPS / Caddy local]
+    C[Cliente] -- HTTPS --> P[Proxy TLS<br/>Cloudflare + Apache na VPS / Caddy local]
     P --> G[API Gateway<br/>JWT · rate limit · roteamento]
     G -- REST síncrono<br/>timeout+retry+breaker --> I[Serviço de inferência<br/>sentimento · embeddings]
     G -- XADD + traceparent --> R[(Redis Streams<br/>fila jobs)]
@@ -213,9 +213,14 @@ docker compose up -d --scale worker=3
 **Controlador/finalidade:** projeto acadêmico de demonstração. Os dados são tratados
 **exclusivamente para prestar o serviço solicitado pelo próprio usuário** (classificar
 o texto, indexá-lo e permitir a busca semântica), com base na execução do serviço
-pedido pelo titular (art. 7º, V). Não há compartilhamento com terceiros, uso para
-treinar modelos, perfilamento nem publicidade. O modelo roda localmente e nenhum
-texto é enviado a APIs externas.
+pedido pelo titular (art. 7º, V). Não há venda ou compartilhamento para outras
+finalidades, uso para treinar modelos, perfilamento nem publicidade. O modelo roda
+localmente e nenhum texto é enviado a APIs de IA externas.
+
+**Operador:** o **Cloudflare** atua como proxy de borda (CDN/TLS) na frente da VPS.
+Ele termina o HTTPS público e, portanto, trata os dados *em trânsito* (incluindo o IP
+de quem acessa) apenas para entregar a requisição à origem e proteger contra abuso,
+conforme a política de privacidade dele. Ele não recebe os dados armazenados (Redis/Qdrant).
 
 | Dado | Onde fica | Finalidade | Retenção |
 |---|---|---|---|
@@ -230,6 +235,7 @@ texto é enviado a APIs externas.
 | Logs da aplicação | stdout dos containers | operação e diagnóstico | **não contêm dados pessoais** (só método, rota, status, duração e `trace_id`) |
 | Traces | Jaeger (em memória) | diagnóstico de desempenho/falhas | **não contêm o texto** (argumentos do Redis mascarados, sem query string); descartados ao reiniciar o Jaeger |
 | Log de acesso do Apache | `/var/log/apache2` da VPS | operação do proxy | formato próprio **sem IP e sem query string**; rotação do Ubuntu (14 dias). O log de erros do Apache pode conter IP, com a mesma rotação |
+| Dados em trânsito (requisição + IP) | Cloudflare (operador, borda) | entregar a requisição à VPS, TLS e proteção contra abuso | não armazenados pela plataforma; tratados pelo Cloudflare conforme a política dele |
 
 **Direitos do titular (art. 18):** eliminação imediata via `DELETE /documentos/{id}`
 (remove vetor, texto e status do job); acesso aos próprios dados via `GET /jobs/{id}` e
@@ -267,7 +273,7 @@ escrita e aceita **consistência eventual**:
 
 | Opção | Custo | Observação |
 |---|---|---|
-| **Adotada: VPS própria, todos os containers em um host** | custo fixo da VPS já existente (marginal ≈ R$ 0) | ~1,2 GB de RAM; Let's Encrypt gratuito; sem cobrança por requisição |
+| **Adotada: VPS própria + Cloudflare (plano gratuito) na borda** | custo fixo da VPS já existente (marginal ≈ R$ 0); Cloudflare e Let's Encrypt gratuitos | ~1,2 GB de RAM; sem cobrança por requisição; sem *cold start* |
 | PaaS free tier (Render/Railway) | R$ 0 | serviços "dormem" (cold start de 30–60 s), sem worker gratuito, Redis/Qdrant limitados |
 | Kubernetes gerenciado | alto (control plane + nós + LB) | só compensa com muitas réplicas; manifests prontos em [k8s/](k8s/) |
 | LLM via API paga | por token | evitado: o modelo local custa zero por requisição e não envia dados a terceiros (melhor para a LGPD) |
@@ -302,16 +308,29 @@ Jaeger guarda traces em memória; o worker escala horizontalmente só quando a f
 
 ## 8. Deploy na nuvem (VPS própria)
 
+```
+Internet ─HTTPS─> Cloudflare (borda, plano gratuito) ─HTTPS─> Apache :443 na VPS
+                                                     └─> 127.0.0.1:8000 gateway (Podman)
+                                                     └─> 127.0.0.1:16686 Jaeger (/jaeger, com senha)
+```
+
 A stack roda numa VPS Ubuntu com **Podman**, atrás do **Apache** (que já atendia
-80/443) fazendo o TLS com Let's Encrypt. O mesmo `docker-compose.yml` é usado, mais a
-sobreposição [docker-compose.prod.yml](docker-compose.prod.yml) (portas só em
-`127.0.0.1`, segredos obrigatórios, `restart: always`):
+80/443 para outros sistemas) com certificado Let's Encrypt, e o **Cloudflare** na borda.
+O mesmo `docker-compose.yml` é usado, mais a sobreposição
+[docker-compose.prod.yml](docker-compose.prod.yml) (portas só em `127.0.0.1`,
+segredos obrigatórios, `restart: always`, sem o Caddy):
 
 ```bash
 podman compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Passo a passo completo (DNS, Podman, segredos, Apache, certbot, CD):
+> **Sobre o "free tier" (item 4 do edital):** em vez de um PaaS gratuito, a plataforma
+> foi publicada em uma VPS própria já existente, com Cloudflare (plano gratuito) na borda.
+> O custo marginal é zero e evita as limitações dos free tiers de PaaS (serviços que
+> "dormem", sem worker gratuito, Redis/Qdrant limitados). Veja o relatório de custo na
+> seção 7. A stack é portátil: os mesmos containers rodam em qualquer provedor.
+
+Passo a passo completo (Podman, segredos, Apache, CD):
 **[deploy/INSTRUCOES-VPS.md](deploy/INSTRUCOES-VPS.md)**.
 
 ---
@@ -321,6 +340,8 @@ Passo a passo completo (DNS, Podman, segredos, Apache, certbot, CD):
 - **CI/CD** ([.github/workflows/ci-cd.yml](.github/workflows/ci-cd.yml)): testes unitários → sobe a
   stack inteira no runner e roda o teste ponta a ponta → (opcional) publica na VPS via SSH a cada push na `main`.
 - **Painel de métricas**: `/painel`.
+- **Componente na borda**: o Cloudflare termina o HTTPS público e faz proxy/proteção na
+  borda, antes de o tráfego chegar à VPS.
 - **Manifests de Kubernetes** ([k8s/](k8s/)): Deployments/StatefulSets, probes, Ingress com TLS, HPA.
 - **Autoescalonamento por tamanho da fila**: `ScaledObject` do KEDA no worker
   (1 réplica a cada 20 mensagens pendentes, até 10). No compose: `--scale worker=N`.
