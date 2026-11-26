@@ -1,0 +1,54 @@
+# CI: testes unitarios + sobe a stack inteira e roda o teste ponta a ponta.
+# CD: se configurado, publica na VPS a cada push na main (via SSH).
+#   Para habilitar o CD, crie em Settings > Secrets and variables > Actions:
+#     variavel  DEPLOY_HABILITADO = true
+#     segredos  VPS_HOST, VPS_USUARIO, VPS_CHAVE_SSH, VPS_DIRETORIO
+name: ci-cd
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+        working-directory: tests
+      - run: python -m pytest -q tests
+
+  integracao:
+    runs-on: ubuntu-latest
+    needs: testes
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sobe a stack com UM comando
+        run: docker compose up -d --build --wait
+      - name: Teste ponta a ponta (gateway -> fila -> worker -> inferencia -> qdrant)
+        run: bash scripts/demo.sh http://localhost:8000
+      - name: Logs em caso de falha
+        if: failure()
+        run: docker compose logs --tail 100
+      - run: docker compose down -v
+        if: always()
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: integracao
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HABILITADO == 'true'
+    steps:
+      - name: Publica na VPS
+        env:
+          CHAVE: ${{ secrets.VPS_CHAVE_SSH }}
+          HOST: ${{ secrets.VPS_HOST }}
+          USUARIO: ${{ secrets.VPS_USUARIO }}
+          DIRETORIO: ${{ secrets.VPS_DIRETORIO }}
+        run: |
+          install -m 600 /dev/null chave && printf '%s\n' "$CHAVE" > chave
+          ssh -i chave -o StrictHostKeyChecking=accept-new "$USUARIO@$HOST" \
+            "cd '$DIRETORIO' && bash deploy/atualizar.sh"
