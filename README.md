@@ -16,8 +16,11 @@ com HTTPS, observável (rastreamento distribuído) e protegida (JWT, rate limit,
 | **API (HTTPS)** | **https://ia.nascimentodavi.dev.br** |
 | Documentação interativa (Swagger) | `/docs` |
 | Painel de métricas | `/painel` |
-| Rastreamento (Jaeger, com senha) | `/jaeger` |
-| Conta de demonstração | usuário `demo` · senha `demo123` |
+| Rastreamento distribuído (Jaeger) | `/jaeger` · usuário `avaliador` · senha `sd2026-c3a2` |
+| Conta de demonstração da API | usuário `demo` · senha `demo123` |
+
+> As duas credenciais são públicas de propósito, para a avaliação. Os traces não contêm
+> dados pessoais (ver seção 6), e a API tem rate limit por usuário.
 
 Teste rápido do deploy público: `bash scripts/demo.sh https://ia.nascimentodavi.dev.br`
 
@@ -182,7 +185,10 @@ docker compose up -d --scale worker=3
   `gateway (POST /documentos) → jobs publish → jobs process (worker) → inferencia
   (/indexar → modelo.classificar → modelo.embedding) → PUT no Qdrant`, incluindo
   o tempo de espera na fila (`fila.tempo_espera_s`) e o número da tentativa.
-  Abra o Jaeger, escolha o serviço `gateway` e a operação `POST /documentos`.
+  **Para ver no ambiente público:** gere tráfego com `bash scripts/demo.sh https://ia.nascimentodavi.dev.br`
+  (ou pelo `/docs`), abra `https://ia.nascimentodavi.dev.br/jaeger` (usuário `avaliador`,
+  senha `sd2026-c3a2`), escolha o serviço `gateway`, a operação `POST /documentos` e
+  clique em **Find Traces**. Os traces ficam em memória e são apagados quando o Jaeger reinicia.
 - **Logs estruturados em JSON** com `trace_id` (correlação log ↔ trace). Registram
   apenas método, rota, status e duração. Nunca registram corpo, query string, IP ou token.
 - **Métricas** em `/metricas` e painel em `/painel`: estado do circuit breaker, tamanho
