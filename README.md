@@ -196,7 +196,7 @@ docker compose up -d --scale worker=3
 
 | Controle | Implementação |
 |---|---|
-| **HTTPS** | Produção: Apache + certificado Let's Encrypt (renovação automática) com redirecionamento HTTP→HTTPS e HSTS. Local: Caddy com CA interna |
+| **HTTPS** | Produção: Cloudflare na borda + Apache na origem com certificado Let's Encrypt, redirecionamento HTTP→HTTPS e HSTS. Local: Caddy com CA interna |
 | **Autenticação JWT** | `POST /login` emite token HS256 com `exp` (30 min), `iss` e `sub`; todas as rotas de negócio exigem `Authorization: Bearer` (401 se ausente, inválido, forjado ou expirado) |
 | **Rate limit** | janela fixa por minuto no Redis (compartilhada entre réplicas): 30 req/min por usuário, 10 tentativas de login/min por IP (contra força bruta) → `429` + `Retry-After` |
 | **Superfície mínima** | só o proxy TLS é público; gateway e Jaeger escutam em `127.0.0.1` na VPS; inferência, worker, Redis e Qdrant ficam só na rede interna |

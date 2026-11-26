@@ -78,32 +78,33 @@ curl http://127.0.0.1:8000/saude                 # {"status":"ok"}
 bash scripts/demo.sh http://127.0.0.1:8000       # teste ponta a ponta
 ```
 
-## 5. Apache como proxy reverso
+## 5. Apache como proxy reverso + HTTPS
+
+O dominio fica atras do **Cloudflare** (HTTPS publico), que se conecta ao Apache
+na porta 443. O vhost [apache-plataforma-ia.conf](apache-plataforma-ia.conf) reaproveita
+o certificado Let's Encrypt que os outros sites da VPS ja usam
+(`/etc/letsencrypt/live/nascimentodavi.dev.br/`), redireciona :80 para HTTPS e
+faz proxy para o gateway. Nao e preciso mexer em DNS nem gerar certificado novo.
 
 ```bash
 apt-get install -y apache2-utils
-a2enmod proxy proxy_http headers ssl rewrite
+a2enmod proxy proxy_http headers ssl
 
 cp deploy/apache-plataforma-ia.conf /etc/apache2/sites-available/plataforma-ia.conf
-sed -i 's/ia\.SEUDOMINIO\.com\.br/ia.seudominio.com.br/' /etc/apache2/sites-available/plataforma-ia.conf
 
 # usuario/senha para a UI do Jaeger (/jaeger)
 htpasswd -c /etc/apache2/.htpasswd-plataforma-ia professor
 
 a2ensite plataforma-ia
 apache2ctl configtest && systemctl reload apache2
-curl http://ia.seudominio.com.br/saude           # ja responde via Apache (HTTP)
+curl -k -H "Host: ia.nascimentodavi.dev.br" https://127.0.0.1/saude   # {"status":"ok"}
 ```
 
-## 6. HTTPS (Let's Encrypt)
+## 6. HTTPS
 
-```bash
-apt-get install -y certbot python3-certbot-apache   # se ainda nao tiver
-certbot --apache -d ia.seudominio.com.br --redirect
-```
-
-O certbot cria o vhost `:443` com o certificado, redireciona HTTP para HTTPS e
-agenda a renovacao automatica (`systemctl list-timers | grep certbot`).
+Feito pelo Cloudflare (borda) + certificado do Apache (origem); a renovacao do
+certificado e a mesma dos demais sites da VPS. Sem Cloudflare, bastaria
+`certbot --apache -d ia.nascimentodavi.dev.br`.
 
 ## 7. Validar o deploy publico
 
@@ -155,5 +156,5 @@ No GitHub (Settings > Secrets and variables > Actions):
 | `502 Proxy Error` no navegador | stack parada: rode o `ps` do passo 4 e veja os logs |
 | `required variable ... is missing` | faltou algum segredo no `.env` (passo 3) |
 | `Cannot connect to the Docker daemon` | `systemctl enable --now podman.socket` |
-| certbot falha no desafio | DNS ainda nao propagou (`dig`), ou a porta 80 esta bloqueada no firewall |
+| Abre outro site da VPS | falta o vhost `:443` do subdominio, ou o site nao foi habilitado (`a2ensite plataforma-ia`) |
 | `/jaeger` sem estilos | confira se o container jaeger subiu com `QUERY_BASE_PATH=/jaeger` (vem do `docker-compose.prod.yml`) |
