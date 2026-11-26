@@ -10,13 +10,11 @@ Responsabilidades:
   * metricas e painel do sistema (/metricas, /painel)
 """
 import logging
-import threading
 import time
 import uuid
 from pathlib import Path
 
 import redis
-import requests
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from opentelemetry import trace
@@ -37,7 +35,6 @@ STREAM_JOBS = config.texto("STREAM_JOBS", "jobs")
 STREAM_DLQ = f"{STREAM_JOBS}:dlq"
 GRUPO_WORKERS = config.texto("GRUPO_WORKERS", "workers")
 RETENCAO_JOB_S = config.inteiro("RETENCAO_JOB_S", 24 * 3600)
-URL_WORKER = config.texto("URL_WORKER")  # opcional: "acorda" o worker no free tier
 
 r = redis.Redis.from_url(config.texto("REDIS_URL", "redis://localhost:6379/0"),
                          decode_responses=True, socket_timeout=2, socket_connect_timeout=2)
@@ -94,19 +91,6 @@ def chamar_inferencia(metodo: str, caminho: str, **kwargs):
                                  f"{inferencia.tentativas} tentativas: {e}")
     except ErroPermanente as e:
         raise HTTPException(e.status if e.status < 500 else 502, e.detalhe)
-
-
-def acordar_worker() -> None:
-    """No free tier do Render servicos 'dormem'; um GET acorda o worker."""
-    if not URL_WORKER:
-        return
-
-    def _ping():
-        try:
-            requests.get(f"{URL_WORKER.rstrip('/')}/saude", timeout=3)
-        except requests.RequestException:
-            pass
-    threading.Thread(target=_ping, daemon=True).start()
 
 
 # ------------------------------------------------------------------ modelos
@@ -188,7 +172,6 @@ def enviar_documento(entrada: Entrada, usuario: str = Depends(limitar_por_usuari
         except redis.RedisError:
             span.set_status(trace.Status(trace.StatusCode.ERROR, "fila indisponivel"))
             raise HTTPException(503, "fila indisponivel; tente novamente")
-    acordar_worker()
     return {"job_id": job_id, "status": "enfileirado", "acompanhe_em": f"/jobs/{job_id}"}
 
 

@@ -1,7 +1,7 @@
 """Leitura de configuracao a partir de variaveis de ambiente.
 
 Toda configuracao da plataforma vem do ambiente: o mesmo container roda
-local (docker compose), em Kubernetes ou no Render sem alterar o codigo.
+local (docker compose), na VPS ou em Kubernetes sem alterar o codigo.
 """
 import os
 

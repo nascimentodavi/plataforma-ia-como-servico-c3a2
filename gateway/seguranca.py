@@ -73,7 +73,7 @@ def usuario_atual(credenciais: HTTPAuthorizationCredentials | None = Depends(_po
 
 
 def ip_cliente(request: Request) -> str:
-    # Atras do proxy do Render/Caddy o IP real vem em X-Forwarded-For.
+    # Atras do proxy (Cloudflare/Apache/Caddy) o IP real vem em X-Forwarded-For.
     encaminhado = request.headers.get("x-forwarded-for", "")
     if encaminhado:
         return encaminhado.split(",")[0].strip()
