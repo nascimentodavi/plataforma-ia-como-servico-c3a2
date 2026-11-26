@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: plataforma-ia
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plataforma-config
+  namespace: plataforma-ia
+data:
+  AMBIENTE: k8s
+  REDIS_URL: redis://redis:6379/0
+  URL_INFERENCIA: http://inferencia:8001
+  QDRANT_URL: http://qdrant:6333
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+  TIMEOUT_INFERENCIA_S: "5"
+  TENTATIVAS: "3"
+  CB_LIMITE_FALHAS: "5"
+  CB_TEMPO_RESET_S: "30"
+  RATE_LIMIT_POR_MINUTO: "30"
+  RETENCAO_JOB_S: "86400"
+  RETENCAO_VETORES_S: "604800"
+---
+# EXEMPLO: em producao crie com `kubectl create secret generic` (nunca commite segredos reais).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: plataforma-segredos
+  namespace: plataforma-ia
+type: Opaque
+stringData:
+  JWT_SEGREDO: troque-me
+  TOKEN_INTERNO: troque-me
+  QDRANT_API_KEY: troque-me
+  USUARIOS: demo:demo123

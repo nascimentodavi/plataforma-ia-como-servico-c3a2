@@ -1,0 +1,28 @@
+# Gateway: escala por CPU (HPA nativo).
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: gateway, namespace: plataforma-ia}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: gateway}
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+---
+# Worker: escala pelo TAMANHO DA FILA (KEDA - https://keda.sh, precisa estar instalado).
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata: {name: worker, namespace: plataforma-ia}
+spec:
+  scaleTargetRef: {name: worker}
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  cooldownPeriod: 60
+  triggers:
+    - type: redis-streams
+      metadata:
+        address: redis.plataforma-ia.svc.cluster.local:6379
+        stream: jobs
+        consumerGroup: workers
+        pendingEntriesCount: "20"   # 1 replica a cada 20 mensagens pendentes

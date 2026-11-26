@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: inferencia, namespace: plataforma-ia}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: inferencia}}
+  template:
+    metadata: {labels: {app: inferencia}}
+    spec:
+      containers:
+        - name: inferencia
+          image: ghcr.io/nascimentodavi/plataforma-ia-inferencia:latest
+          ports: [{containerPort: 8001}]
+          envFrom: [{configMapRef: {name: plataforma-config}}, {secretRef: {name: plataforma-segredos}}]
+          readinessProbe: {httpGet: {path: /saude, port: 8001}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /saude, port: 8001}, periodSeconds: 15}
+          resources: {requests: {cpu: 100m, memory: 192Mi}, limits: {memory: 512Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: inferencia, namespace: plataforma-ia}
+spec: {selector: {app: inferencia}, ports: [{port: 8001}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: worker, namespace: plataforma-ia}
+spec:
+  replicas: 1   # gerenciado pelo KEDA (30-escalonamento.yaml)
+  selector: {matchLabels: {app: worker}}
+  template:
+    metadata: {labels: {app: worker}}
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: worker
+          image: ghcr.io/nascimentodavi/plataforma-ia-worker:latest
+          envFrom: [{configMapRef: {name: plataforma-config}}, {secretRef: {name: plataforma-segredos}}]
+          livenessProbe: {httpGet: {path: /saude, port: 8002}, periodSeconds: 15}
+          resources: {requests: {cpu: 50m, memory: 96Mi}, limits: {memory: 256Mi}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: gateway, namespace: plataforma-ia}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: gateway}}
+  template:
+    metadata: {labels: {app: gateway}}
+    spec:
+      containers:
+        - name: gateway
+          image: ghcr.io/nascimentodavi/plataforma-ia-gateway:latest
+          ports: [{containerPort: 8000}]
+          envFrom: [{configMapRef: {name: plataforma-config}}, {secretRef: {name: plataforma-segredos}}]
+          readinessProbe: {httpGet: {path: /prontidao, port: 8000}, periodSeconds: 5}
+          livenessProbe: {httpGet: {path: /saude, port: 8000}, periodSeconds: 15}
+          resources: {requests: {cpu: 100m, memory: 128Mi}, limits: {memory: 256Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: gateway, namespace: plataforma-ia}
+spec: {selector: {app: gateway}, ports: [{port: 8000}]}
