@@ -84,7 +84,9 @@ services:
       <<: *saude-python
     depends_on:
       redis: {condition: service_healthy}
-      inferencia: {condition: service_healthy}
+      # So espera a inferencia INICIAR: se ela ainda nao estiver pronta, o worker
+      # nao perde mensagens (retentativa + circuit breaker + reentrega da fila).
+      inferencia: {condition: service_started}
     restart: unless-stopped
     # Escale horizontalmente: docker compose up -d --scale worker=3
 
@@ -105,11 +107,13 @@ services:
       <<: *saude-python
     depends_on:
       redis: {condition: service_healthy}
-      inferencia: {condition: service_healthy}
+      # Gateway sobe sem esperar a inferencia ficar saudavel: enquanto ela nao
+      # responde, o circuit breaker devolve 503 rapido em vez de travar.
+      inferencia: {condition: service_started}
     restart: unless-stopped
 
   # Terminacao TLS local (HTTPS em https://localhost:8443, certificado da CA interna
-  # do Caddy). Na nuvem o HTTPS e feito pelo proprio Render.
+  # do Caddy). Na VPS o HTTPS e feito pelo Apache.
   https:
     image: docker.io/library/caddy:2.8-alpine
     ports: ["8443:443"]
