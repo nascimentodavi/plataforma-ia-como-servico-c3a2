@@ -1,0 +1,52 @@
+# Sobreposicao de PRODUCAO (VPS com Apache como proxy TLS na frente).
+#
+#   podman compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Diferencas em relacao ao ambiente local:
+#   * gateway e Jaeger escutam SO em 127.0.0.1 -> o unico acesso externo e via
+#     Apache (HTTPS, certificado Let's Encrypt). Nada da stack fica exposto direto.
+#   * o Caddy (HTTPS local) e desligado: o Apache ja ocupa as portas 80/443.
+#   * segredos sao OBRIGATORIOS (a stack nao sobe sem eles no .env).
+#   * restart: always -> o podman-restart.service religa tudo apos reboot.
+x-sempre: &sempre
+  restart: always
+
+services:
+  redis: *sempre
+  qdrant:
+    <<: *sempre
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?defina QDRANT_API_KEY no .env}
+
+  jaeger:
+    <<: *sempre
+    environment:
+      QUERY_BASE_PATH: /jaeger   # UI publicada pelo Apache em /jaeger (com senha)
+    ports: !override
+      - "127.0.0.1:${PORTA_JAEGER:-16686}:16686"
+
+  inferencia:
+    <<: *sempre
+    environment:
+      AMBIENTE: producao
+      TOKEN_INTERNO: ${TOKEN_INTERNO:?defina TOKEN_INTERNO no .env}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?defina QDRANT_API_KEY no .env}
+
+  worker:
+    <<: *sempre
+    environment:
+      AMBIENTE: producao
+      TOKEN_INTERNO: ${TOKEN_INTERNO:?defina TOKEN_INTERNO no .env}
+
+  gateway:
+    <<: *sempre
+    environment:
+      AMBIENTE: producao
+      TOKEN_INTERNO: ${TOKEN_INTERNO:?defina TOKEN_INTERNO no .env}
+      JWT_SEGREDO: ${JWT_SEGREDO:?defina JWT_SEGREDO no .env}
+      USUARIOS: ${USUARIOS:?defina USUARIOS no .env}
+    ports: !override
+      - "127.0.0.1:${PORTA_GATEWAY:-8000}:8000"
+
+  https:
+    profiles: ["https-local"]   # desligado em producao (TLS fica com o Apache)
