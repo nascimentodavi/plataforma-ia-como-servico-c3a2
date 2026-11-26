@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Painel da Plataforma</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --txt:#1d2330; --sub:#5b6475; --ok:#1a7f4b; --warn:#b26b00; --bad:#c0392b; --borda:#e1e4ea; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --card:#1d2128; --txt:#e8ebf0; --sub:#9aa3b2; --borda:#2c323c; --ok:#3ecf8e; --warn:#f0a83a; --bad:#ff6b5e; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--txt); padding:24px 16px; }
+  main { max-width:960px; margin:0 auto; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  p.sub { color:var(--sub); margin:0 0 20px; font-size:.9rem; }
+  .grade { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; }
+  .card { background:var(--card); border:1px solid var(--borda); border-radius:10px; padding:14px 16px; }
+  .rotulo { color:var(--sub); font-size:.8rem; text-transform:uppercase; letter-spacing:.04em; }
+  .valor { font-size:1.8rem; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .fechado { color:var(--ok); } .meio-aberto { color:var(--warn); } .aberto, .indisponivel { color:var(--bad); }
+  footer { color:var(--sub); font-size:.8rem; margin-top:16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Plataforma de IA como Serviço</h1>
+  <p class="sub">Métricas agregadas do sistema, atualizadas a cada 3 s. Nenhum dado pessoal é exibido.</p>
+  <div class="grade">
+    <div class="card"><div class="rotulo">Circuit breaker (inferência)</div><div class="valor" id="cb">…</div></div>
+    <div class="card"><div class="rotulo">Mensagens no stream</div><div class="valor" id="fila">…</div></div>
+    <div class="card"><div class="rotulo">Pendentes (sem ACK)</div><div class="valor" id="pend">…</div></div>
+    <div class="card"><div class="rotulo">Dead letter</div><div class="valor" id="dlq">…</div></div>
+    <div class="card"><div class="rotulo">Jobs processados</div><div class="valor" id="ok">…</div></div>
+    <div class="card"><div class="rotulo">Retentativas</div><div class="valor" id="ret">…</div></div>
+    <div class="card"><div class="rotulo">Jobs com falha</div><div class="valor" id="falhas">…</div></div>
+    <div class="card"><div class="rotulo">Workers registrados</div><div class="valor" id="workers">…</div></div>
+  </div>
+  <footer id="rodape">carregando…</footer>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  async function atualizar() {
+    try {
+      const d = await (await fetch("metricas")).json();
+      const cb = d.circuit_breaker_inferencia.estado;
+      $("cb").textContent = cb; $("cb").className = "valor " + cb;
+      const f = d.fila || {}, j = d.jobs || {};
+      $("fila").textContent = f.mensagens_no_stream ?? "–";
+      $("pend").textContent = f.pendentes_sem_ack ?? "–";
+      $("dlq").textContent = f.dead_letter ?? "–";
+      $("workers").textContent = f.workers_registrados ?? "–";
+      $("ok").textContent = j.processados ?? "–";
+      $("ret").textContent = j.retentativas ?? "–";
+      $("falhas").textContent = j.falhas ?? "–";
+      $("rodape").textContent = "Redis: " + d.redis + " · atualizado às " + new Date().toLocaleTimeString("pt-BR");
+    } catch (e) { $("rodape").textContent = "gateway inacessível"; }
+  }
+  atualizar(); setInterval(atualizar, 3000);
+</script>
+</body>
+</html>
