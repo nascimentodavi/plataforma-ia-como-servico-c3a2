@@ -1,0 +1,11 @@
+# HTTPS local: Caddy termina o TLS e repassa para o gateway na rede interna.
+{
+	# Nao tenta instalar a CA no sistema (estamos dentro de um container).
+	skip_install_trust
+}
+
+https://localhost {
+	tls internal
+	reverse_proxy gateway:8000
+	header Strict-Transport-Security "max-age=31536000"
+}

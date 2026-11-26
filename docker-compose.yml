@@ -1,0 +1,125 @@
+# Plataforma de IA como Servico - sobe o sistema inteiro com UM comando:
+#
+#     docker compose up --build
+#
+# Servicos se encontram pelo NOME (redis, qdrant, inferencia...), nunca por IP.
+# So o gateway (8000), o Caddy/HTTPS (8443) e a UI do Jaeger (16686) ficam
+# expostos no host; inferencia, worker, redis e qdrant ficam na rede interna.
+name: plataforma-ia
+
+x-python-saude: &saude-python
+  interval: 10s
+  timeout: 3s
+  retries: 6
+  start_period: 15s
+
+x-comum: &env-comum
+  AMBIENTE: ${AMBIENTE:-local}
+  LOG_NIVEL: ${LOG_NIVEL:-INFO}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
+  TOKEN_INTERNO: ${TOKEN_INTERNO:-token-interno-local}
+  TENTATIVAS: ${TENTATIVAS:-3}
+  CB_LIMITE_FALHAS: ${CB_LIMITE_FALHAS:-5}
+  CB_TEMPO_RESET_S: ${CB_TEMPO_RESET_S:-30}
+  TIMEOUT_INFERENCIA_S: ${TIMEOUT_INFERENCIA_S:-5}
+
+services:
+  # ---------------------------------------------------------------- infraestrutura
+  redis:
+    image: docker.io/library/redis:7.4-alpine
+    # AOF: a fila sobrevive a reinicio do container (durabilidade da mensageria)
+    command: ["redis-server", "--appendonly", "yes", "--save", ""]
+    volumes: ["redis-dados:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  qdrant:
+    image: docker.io/qdrant/qdrant:v1.12.4
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-qdrant-chave-local}
+      QDRANT__TELEMETRY_DISABLED: "true"
+    volumes: ["qdrant-dados:/qdrant/storage"]
+    restart: unless-stopped
+
+  jaeger:
+    image: docker.io/jaegertracing/all-in-one:1.62.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports: ["16686:16686"]   # UI de rastreamento: http://localhost:16686
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------- aplicacao
+  inferencia:
+    build: {context: ., dockerfile: inferencia/Dockerfile}
+    environment:
+      <<: *env-comum
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-qdrant-chave-local}
+      RETENCAO_VETORES_S: ${RETENCAO_VETORES_S:-604800}
+      FALHA_PERCENTUAL: ${FALHA_PERCENTUAL:-0}
+      LATENCIA_EXTRA_MS: ${LATENCIA_EXTRA_MS:-0}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8001/saude', timeout=3)"]
+      <<: *saude-python
+    depends_on:
+      qdrant: {condition: service_started}
+      jaeger: {condition: service_started}
+    restart: unless-stopped
+
+  worker:
+    build: {context: ., dockerfile: worker/Dockerfile}
+    environment:
+      <<: *env-comum
+      REDIS_URL: redis://redis:6379/0
+      URL_INFERENCIA: http://inferencia:8001
+      MAX_TENTATIVAS: ${MAX_TENTATIVAS:-5}
+      VISIBILIDADE_MS: ${VISIBILIDADE_MS:-15000}
+      RETENCAO_JOB_S: ${RETENCAO_JOB_S:-86400}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8002/saude', timeout=3)"]
+      <<: *saude-python
+    depends_on:
+      redis: {condition: service_healthy}
+      inferencia: {condition: service_healthy}
+    restart: unless-stopped
+    # Escale horizontalmente: docker compose up -d --scale worker=3
+
+  gateway:
+    build: {context: ., dockerfile: gateway/Dockerfile}
+    ports: ["8000:8000"]
+    environment:
+      <<: *env-comum
+      REDIS_URL: redis://redis:6379/0
+      URL_INFERENCIA: http://inferencia:8001
+      JWT_SEGREDO: ${JWT_SEGREDO:-troque-este-segredo-em-producao}
+      JWT_EXPIRA_MIN: ${JWT_EXPIRA_MIN:-30}
+      USUARIOS: ${USUARIOS:-demo:demo123}
+      RATE_LIMIT_POR_MINUTO: ${RATE_LIMIT_POR_MINUTO:-30}
+      RETENCAO_JOB_S: ${RETENCAO_JOB_S:-86400}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/saude', timeout=3)"]
+      <<: *saude-python
+    depends_on:
+      redis: {condition: service_healthy}
+      inferencia: {condition: service_healthy}
+    restart: unless-stopped
+
+  # Terminacao TLS local (HTTPS em https://localhost:8443, certificado da CA interna
+  # do Caddy). Na nuvem o HTTPS e feito pelo proprio Render.
+  https:
+    image: docker.io/library/caddy:2.8-alpine
+    ports: ["8443:443"]
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-dados:/data
+    depends_on: [gateway]
+    restart: unless-stopped
+
+volumes:
+  redis-dados:
+  qdrant-dados:
+  caddy-dados:
