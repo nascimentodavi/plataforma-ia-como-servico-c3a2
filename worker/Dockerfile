@@ -17,5 +17,5 @@ USER app
 # A porta serve apenas o /saude (healthcheck e "despertar" no free tier).
 EXPOSE 8002
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
-  CMD python -c "import os,urllib.request as u; u.urlopen('http://localhost:'+os.environ['PORT']+'/saude', timeout=3)"
+  CMD python -c "import os,urllib.request as u; u.urlopen('http://127.0.0.1:'+os.environ['PORT']+'/saude', timeout=3)"
 CMD ["python", "worker.py"]
