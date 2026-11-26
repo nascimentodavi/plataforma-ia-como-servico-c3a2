@@ -13,13 +13,13 @@ com HTTPS, observável (rastreamento distribuído) e protegida (JWT, rate limit,
 
 | | |
 |---|---|
-| **API (HTTPS)** | **https://ia.SEUDOMINIO.com.br** ← *substituir pela URL real após o deploy* |
+| **API (HTTPS)** | **https://ia.nascimentodavi.dev.br** |
 | Documentação interativa (Swagger) | `/docs` |
 | Painel de métricas | `/painel` |
 | Rastreamento (Jaeger, com senha) | `/jaeger` |
 | Conta de demonstração | usuário `demo` · senha `demo123` |
 
-Teste rápido do deploy público: `bash scripts/demo.sh https://ia.SEUDOMINIO.com.br`
+Teste rápido do deploy público: `bash scripts/demo.sh https://ia.nascimentodavi.dev.br`
 
 ---
 
